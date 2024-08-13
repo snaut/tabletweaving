@@ -25,3 +25,4 @@ This is a hobby project, so I'll work on it whenever I feel like it.
 * refractor code so it's more readable
 * fancier UI
 * more explanantions in the tablet generator
+* keyboard input
