@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <title>Tabletweaving Pattern Generator</title>
+    <script>
+
+      var debug_pattern;
+
+      var global_pattern = {
+        nr_tablets: NaN,
+        nr_holes: NaN,
+        nr_rows: NaN,
+        warping_direction: [],
+        color_values: [],
+        colors: [],
+        turns: [],
+        bg_colors: ["", ""],
+      }
+
+      // add another color selector
+      function addColor(){
+        let new_col = document.querySelector("#cols > input:last-of-type").cloneNode();
+        document.querySelector("#cols").innerHTML += "\n";
+        document.querySelector("#cols").appendChild(new_col);
+        readColors();
+      }
+
+      // remove the last color
+      function removeColor(){
+        if(confirm("The last color will be replaced by empty holes.")){
+          document.querySelector("#cols > input:last-of-type").remove();
+          readColors();
+        } else {
+        }
+      }
+
+      // read background colors
+      function readBGColors(){
+          global_pattern.bg_colors[0] = document.querySelector("#col_forward").value;
+          global_pattern.bg_colors[1] = document.querySelector("#col_backward").value;
+          buildPatternChart();
+      }
+
+      // read values from gui and generate the svg of the warping chart
+      function readSetup(){
+        // read values from inputs
+        let nr_tablets = parseInt(document.querySelector("#nr_tablets").value);
+        let nr_holes = parseInt(document.querySelector("#nr_holes").value);
+        let nr_rows = parseInt(document.querySelector("#nr_rows").value);
+
+        global_pattern.nr_tablets = nr_tablets;
+        global_pattern.nr_holes = nr_holes;
+        global_pattern.nr_rows = nr_rows;
+
+        global_pattern.colors = new Array(nr_tablets);
+        // set colors to initial values
+        for(i=0; i<nr_tablets; i++){
+          global_pattern.colors[i] = new Array(nr_holes);
+          for(j=0; j<nr_holes; j++){
+            global_pattern.colors[i][j] = 1;
+          }
+        }
+
+        // initialise warping warping_direction to ZSZ...ZS...SSZS
+        // start with ZS, repeat Z to the middle of the pattern, repeat S from the middle, end with ZS
+        let warping_direction = Array(nr_tablets);
+        warping_direction[0] = "Z";
+        warping_direction[1] = "S";
+        warping_direction[nr_tablets - 1] = "S";
+        warping_direction[nr_tablets - 2] = "Z";
+        for(i=2; i < Math.ceil(nr_tablets/2); i++){
+          warping_direction[i] = "Z";
+        }
+        for(i=Math.ceil(nr_tablets/2); i < nr_tablets - 2; i++){
+          warping_direction[i] = "S";
+        }
+
+        global_pattern.warping_direction = warping_direction;
+
+        // initialise turns in pattern
+        for(i=0; i<nr_tablets; i++){
+          global_pattern.turns[i] = [];
+        }
+        addRows_helper(nr_rows);
+
+      }
+
+      // update data and redraw when colors are changed
+      function readColors(){
+        // iterate over color inputs and get the colors
+        let all_colors = Array.from(document.querySelectorAll("#cols > input")).map(ele => {
+          let val=ele.value;
+          return(val);
+        });
+        all_colors.unshift("none");
+        global_pattern.color_values = all_colors;
+
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          for(j=0; j<global_pattern.nr_holes; j++){
+            global_pattern.colors[i][j] = (global_pattern.colors[i][j] >= global_pattern.color_values.length)
+              ? 0
+              : global_pattern.colors[i][j];
+          }
+        }
+
+        buildWarpingChart();
+      }
+
+      // create the svg graphic for the lower (warping) diagram
+      function buildWarpingChart(){
+        // set the view-box of the svg element so that i can use a 1x1 grid for the chart
+        document.querySelector("#warping_chart").setAttribute("viewBox", `-1 0 ${global_pattern.nr_tablets+1} ${global_pattern.nr_holes + 1}`);
+
+        // build svg contents
+        let border_width = 0.05;
+        let stroke_width = 0.2;
+        color_definitions = global_pattern.color_values.map((col, i) => {
+          return(`.thread_color_${i} {stroke:${col}}`);
+        }).reduce((x,y) => {
+          return(x + "\n" + y);
+        }, "");
+
+        let svg_contents = `
+        <style>
+          .text_dir {font: bold 0.8px sans-serif;}
+          .text_hole {font: bold 0.8px sans-serif;}
+          .box {fill:white; stroke:black; stroke-width:${border_width};}
+          .thread {stroke-width:${stroke_width}; stroke-linecap:round;}
+          ${color_definitions}
+        </style>
+
+        <symbol id="thread_z" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <path class="thread" d="M -0.3 -0.3 0.3 0.3" />
+          </g>
+        </symbol>
+        <symbol id="thread_s" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <path class="thread" d="M 0.3 -0.3 -0.3 0.3" />
+          </g>
+        </symbol>
+        <symbol id="card_z" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_dir">Z</text>
+          </g>
+        </symbol>
+        <symbol id="card_s" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_dir">S</text>
+          </g>
+        </symbol>
+        <symbol id="hole_0" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">A</text>
+          </g>
+        </symbol>
+        <symbol id="hole_1" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">B</text>
+          </g>
+        </symbol>
+        <symbol id="hole_2" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">C</text>
+          </g>
+        </symbol>
+        <symbol id="hole_3" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">D</text>
+          </g>
+        </symbol>
+        <symbol id="hole_4" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">E</text>
+          </g>
+        </symbol>
+        <symbol id="hole_5" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box" />
+          <text x="-0.4" y="0.4" class="text_hole">F</text>
+          </g>
+        </symbol>
+        `;
+
+        svg_contents = svg_contents + "<g>";
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          if(global_pattern.warping_direction[i] == "Z") {
+            svg_contents = svg_contents + `<use href="#card_z" x="${i}" y="${global_pattern.nr_holes}" onclick="cardClicked(this);" />`;
+          } else {
+            svg_contents = svg_contents + `<use href="#card_s" x="${i}" y="${global_pattern.nr_holes}" onclick="cardClicked(this);" />`;
+          }
+        }
+
+        svg_contents = svg_contents + "</g><g>";
+        for(i=0; i<global_pattern.nr_holes; i++){
+          svg_contents = svg_contents + `<use href="#hole_${i}" x="-1" y="${i}" />`;
+        }
+
+        svg_contents = svg_contents + "</g><g>";
+        for(i=0; i<global_pattern.nr_holes; i++){
+          svg_contents = svg_contents + "<g>";
+          for(j=0; j<global_pattern.nr_tablets; j++){
+            if(global_pattern.warping_direction[j] == "Z"){
+              svg_contents = svg_contents + `<use href="#thread_z" x="${j}" y="${i}" onclick="threadClicked(this);" class="thread_color_${global_pattern.colors[j][i]}" />`;
+            } else {
+              svg_contents = svg_contents + `<use href="#thread_s" x="${j}" y="${i}" onclick="threadClicked(this);" class="thread_color_${global_pattern.colors[j][i]}" />`;
+            }
+          }
+          svg_contents = svg_contents + "</g>";
+        }
+        svg_contents = svg_contents + "</g>";
+
+        document.querySelector("#warping_chart").innerHTML = svg_contents;
+      }
+
+      // build upper (pattern) chart
+      function buildPatternChart(){
+        document.querySelector("#pattern_chart").setAttribute("viewBox", `-1 ${-global_pattern.nr_rows} ${global_pattern.nr_tablets+1} ${global_pattern.nr_rows + 1}`);
+
+        // get pattern
+        let pattern_colors = buildPatternColors();
+        let pattern_direction = buildPatternDirection();
+
+        let box_colors = Array(global_pattern.nr_tablets);
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          box_colors[i] = Array(global_pattern.nr_rows);
+          for(j=0; j<global_pattern.nr_rows; j++){
+            if(global_pattern.turns[i][j] == -1){
+              box_colors[i][j] = "fwd";
+            } else {
+              box_colors[i][j] = "rev";
+            }
+          }
+        }
+
+        // build svg contents
+        let border_width = 0.05;
+        let stroke_width = 0.2;
+        color_definitions = global_pattern.color_values.map((col, i) => {
+          return(`.thread_color_${i} {stroke:${col}}`);
+        }).reduce((x,y) => {
+          return(x + "\n" + y);
+        }, "");
+
+        let svg_contents = `
+        <style>
+          .box {fill:white; stroke:black; stroke-width:${border_width};}
+          .box_fwd {fill:${global_pattern.bg_colors[0]}; stroke:black; stroke-width:${border_width};}
+          .box_rev {fill:${global_pattern.bg_colors[1]}; stroke:black; stroke-width:${border_width};}
+          .thread {stroke-width:${stroke_width}; stroke-linecap:round;}
+          ${color_definitions}
+        </style>
+
+        <symbol id="thread_z_fwd" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box_fwd" />
+          <path class="thread" d="M -0.3 -0.3 0.3 0.3" />
+          </g>
+        </symbol>
+        <symbol id="thread_s_fwd" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box_fwd" />
+          <path class="thread" d="M 0.3 -0.3 -0.3 0.3" />
+          </g>
+        </symbol>
+        <symbol id="thread_z_rev" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box_rev" />
+          <path class="thread" d="M -0.3 -0.3 0.3 0.3" />
+          </g>
+        </symbol>
+        <symbol id="thread_s_rev" width="1" height="1" viewBox="-0.5 -0.5 1 1">
+          <g>
+          <rect x="-0.5" y="-0.5" width="1" height="1" class="box_rev" />
+          <path class="thread" d="M 0.3 -0.3 -0.3 0.3" />
+          </g>
+        </symbol>
+        `;
+
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          for(j=0; j<global_pattern.nr_rows; j++){
+            svg_contents = svg_contents + `<use href="#thread_${pattern_direction[i][j]}_${box_colors[i][j]}" x="${i}" y="${-j}" onclick="patternClicked(this);" class="thread_color_${pattern_colors[i][j]}" />`;
+          }
+        }
+
+        document.querySelector("#pattern_chart").innerHTML = svg_contents;
+
+      }
+
+      // which color does each cell in the pattern have?
+      // TODO: not working for backwards turns: modulo working correctly?
+      function buildPatternColors(){
+        let pattern = [];
+        var i;
+        var position;
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          position=global_pattern.nr_holes-1;
+          pattern[i] = Array(global_pattern.nr_rows);
+          pattern[i][0] = global_pattern.colors[i][position]
+          for(j=1; j<global_pattern.nr_rows; j++){
+            if(global_pattern.turns[i][j-1] == global_pattern.turns[i][j]){
+              position = position + global_pattern.turns[i][j];
+            }
+            pattern[i][j] = global_pattern.colors[i][my_mod(position, global_pattern.nr_holes)];
+          }
+        }
+        debug_pattern = pattern;
+        return(pattern);
+      }
+
+      // directions in the pattern (Z or S)
+      function buildPatternDirection(){
+        let pattern = [];
+        var i;
+        var tmp_direction;
+        for(i=0; i<global_pattern.nr_tablets; i++){
+          pattern[i] = Array(global_pattern.nr_rows);
+          for(j=0; j<global_pattern.nr_rows; j++){
+            if((global_pattern.warping_direction[i] == "Z") & (global_pattern.turns[i][j] == -1)){
+              pattern[i][j] = "z";
+            }
+            if((global_pattern.warping_direction[i] == "S") & (global_pattern.turns[i][j] == -1)){
+              pattern[i][j] = "s";
+            }
+            if((global_pattern.warping_direction[i] == "Z") & (global_pattern.turns[i][j] == 1)){
+              pattern[i][j] = "s";
+            }
+            if((global_pattern.warping_direction[i] == "S") & (global_pattern.turns[i][j] == 1)){
+              pattern[i][j] = "z";
+            }
+          }
+        }
+
+        return(pattern);
+      }
+
+      // circle through colors when thread is clicked
+      function threadClicked(event_source){
+        let card = event_source.getBBox().x;
+        let hole = event_source.getBBox().y;
+        let ncolors = global_pattern.color_values.length;
+        global_pattern.colors[card][hole] = my_mod((global_pattern.colors[card][hole] + 1), ncolors);
+        buildWarpingChart();
+        buildPatternChart();
+      }
+
+      // toggle S/Z on click on card
+      function cardClicked(event_source){
+        let card = event_source.getBBox().x;
+        global_pattern.warping_direction[card] = (global_pattern.warping_direction[card] == "Z") ? "S" : "Z";
+        buildWarpingChart();
+        buildPatternChart();
+      };
+
+      // toggle turn direction
+      function patternClicked(event_source){
+        let x = event_source.getBBox().x;
+        let y = -event_source.getBBox().y;
+        global_pattern.turns[x][y] *= -1;
+        buildPatternChart();
+      }
+
+      // build interface when site first loads
+      function firstSetup(){
+        readSetup();
+        readColors();
+        readBGColors();
+        buildWarpingChart();
+        buildPatternChart();
+      }
+
+      // confirm changes to setup that would overwrite the current pattern
+      function updateSetup(){
+        if(confirm("Updating the number of tablets or holes will delete your current pattern.")){
+          firstSetup();
+        } else {
+          document.querySelector("#nr_tablets").value = global_pattern.nr_tablets;
+          document.querySelector("#nr_holes").value = global_pattern.nr_holes;
+          document.querySelector("#nr_rows").value = global_pattern.nr_rows;
+        }
+      }
+
+      // helper function to add rows (alternating forward backward per default)
+      function addRows_helper(n){
+        for(i=0; i<n; i++){
+          for(j=0; j<global_pattern.nr_tablets; j++){
+            global_pattern.turns[j].push(-1);
+          }
+        }
+      }
+
+      // function to just add rows without changing anything else
+      function addRows(){
+        let add_rows = parseInt(document.querySelector("#add_rows").value);
+        global_pattern.nr_rows += add_rows;
+        // todo: add rows to global_pattern.turns
+        buildPatternChart();
+      }
+
+      // modulo that actually works on the filed of Z_n and does not give negative results
+      function my_mod(x,y){
+        return( ((x % y) + y) % y );
+      }
+
+    </script>
+  </head>
+  <body onload="firstSetup();">
+    <div id="pattern">
+      <p id="pattern_p">
+      <svg id="pattern_chart" width="400" viewBox="-1 0 15 15">
+
+      </svg>
+      </p>
+    </div>
+    <div id="warping">
+      <div id="warp">
+      <p id="threading">
+      <svg id="warping_chart" width="400" viewBox="-1 0 15 5">
+
+      </svg>
+      </p>
+      <p id="tablets">
+        <label for="nr_tablets">Number of Tablets</label>
+        <input id="nr_tablets" type="number" min=4 max=20 step=1, value=14>
+        <br>
+        <label for="nr_holes">Number of Holes per Tablet</label>
+        <input id="nr_holes" type="number" min=3 max=6 step=1, value=4>
+        <br>
+        <label for="nr_rows">Number of Rows in Pattern</label>
+        <input id="nr_rows" type="number" min=2 max=100 step=1, value=16>
+        <br>
+        <label for="button_setup">Update Setup</label>
+        <input id="button_setup" type="button" value="Update" onclick="updateSetup();">
+        <br>
+        <label for="add_rows">Add Rows</label>
+        <input id="add_rows" type="number" min=1 max=100 step=1, value=1>
+        <br>
+        <label for="button_add_rows">Add Rows</label>
+        <input id="button_add_rows" type="button" value="Add Rows" onclick="addRows();">
+      </p>
+      </div>
+      <div id="colors">
+      <p id="cols">
+        Thread Colors <br>
+        <input type="color" value="#bb0000" onchange="readColors();">
+        <input type="color" value="#00bb00" onchange="readColors();">
+        <input type="color" value="#0000bb" onchange="readColors();">
+      </p>
+      <p id="buttons">
+        <input type="button" value="Add Color" onclick="addColor();">
+        <input type="button" value="Remove Last Color" onclick="removeColor();">
+      </p>
+      </div>
+      <div id="bg_colors">
+        Box Background Colors <br>
+        <label for="col_forward">Forward</label>
+        <input id="col_forward" type="color" value="#ffffff" onchange="readBGColors();">
+        <br>
+        <label for="col_backward">Backward</label>
+        <input id="col_backward" type="color" value="#deddda" onchange="readBGColors();">
+      </div>
+    </div>
+  </body>
+</html>
