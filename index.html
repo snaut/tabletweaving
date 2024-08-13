@@ -412,6 +412,14 @@
         return( ((x % y) + y) % y );
       }
 
+      // save pattern
+      function savePattern(){
+        let dl_content = "data:text/json;charset=utf-8,";
+        dl_content += encodeURIComponent(JSON.stringify(global_pattern));
+        document.querySelector("#download_link").setAttribute("href", dl_content);
+        document.querySelector("#download_link").click();
+      };
+
     </script>
   </head>
   <body onload="firstSetup();">
@@ -422,13 +430,14 @@
       </svg>
       </p>
     </div>
-    <div id="warping">
       <div id="warp">
       <p id="threading">
       <svg id="warping_chart" width="400" viewBox="-1 0 15 5">
 
       </svg>
       </p>
+    </div>
+    <div>
       <p id="tablets">
         <label for="nr_tablets">Number of Tablets</label>
         <input id="nr_tablets" type="number" min=4 max=20 step=1, value=14>
@@ -448,8 +457,8 @@
         <label for="button_add_rows">Add Rows</label>
         <input id="button_add_rows" type="button" value="Add Rows" onclick="addRows();">
       </p>
-      </div>
-      <div id="colors">
+    </div>
+    <div id="colors">
       <p id="cols">
         Thread Colors <br>
         <input type="color" value="#bb0000" onchange="readColors();">
@@ -460,15 +469,23 @@
         <input type="button" value="Add Color" onclick="addColor();">
         <input type="button" value="Remove Last Color" onclick="removeColor();">
       </p>
-      </div>
-      <div id="bg_colors">
+    </div>
+    <div id="bg_colors">
         Box Background Colors <br>
         <label for="col_forward">Forward</label>
         <input id="col_forward" type="color" value="#ffffff" onchange="readBGColors();">
         <br>
         <label for="col_backward">Backward</label>
         <input id="col_backward" type="color" value="#deddda" onchange="readBGColors();">
-      </div>
+    </div>
+    <div>
+    <p>
+    Save <input type="button" value="save" onclick="savePattern();">
+    <a id="download_link" download="pattern.JSON" style="display:none;" href="">download</a>
+    </p>
+    <p>
+    Load
+    </p>
     </div>
   </body>
 </html>
