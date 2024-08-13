@@ -1,6 +1,6 @@
 # Tablet Weaving Pattern Editor
 
-A tablet weaving pattern editor written entirely in javascript, html, css, svg.
+A tablet weaving pattern editor written entirely in javascript, html, css, svg. Find a running demo [here](https://snaut.github.io/tabletweaving/).
 
 ## Usage
 
